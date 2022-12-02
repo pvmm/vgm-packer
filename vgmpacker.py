@@ -52,14 +52,36 @@ from modules.lz4enc import LZ4
 from modules.huffman import Huffman
 from modules.vgmparser import VgmStream
 
+
+#
+# ay8910 magic numbers
+#
+
+# Registers
+CHANNEL_A = [0, 1]
+CHANNEL_B = [2, 3]
+CHANNEL_C = [4, 5]
+MIXER = 7
+CHANNEL_A_VOLUME = 8
+CHANNEL_B_VOLUME = 9
+CHANNEL_C_VOLUME = 10
+ENVELOPE_PERIOD = [11, 12]
+ENVELOPE_SHAPE = 13
+
+# extra stuff
+NOISE_PERIOD = 6
+# EON (end-of-noise) marker
+EON = 0x20
+
+
 class VgmPacker:
 
 	# pack options
 	HIGH_COMPRESSION = False # enable 2kb sliding window with 16-bits instead of 255 byte, overridden by LZ48
 	LZ48 = True	# enable 8 bit LZ4 mode
-	OUTPUT_RAWDATA = False # output raw dumps of the data that was compressed by LZ4/Huffman
-	RLE = True # always set now.
-	ENABLE_HUFFMAN = True # optional
+	OUTPUT_RAWDATA = True # output raw dumps of the data that was compressed by LZ4/Huffman
+	RLE = False # always set now.
+	ENABLE_HUFFMAN = False # optional
 	VERBOSE = True
 
 	def __init__(self, rate=60):
@@ -73,7 +95,7 @@ class VgmPacker:
 
 	# split the packed raw data into 14 separate streams
 	# returns array of 14 bytearrays
-	def split_raw(self, rawData, stripCommands = True):
+	def split_raw(self, raw_data, stripCommands = True):
 
 		registers = [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 		registers_opt = [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
@@ -95,51 +117,29 @@ class VgmPacker:
 		# eg. the raw chip writes to all 14 registers every frame
 		n = 0
 		packet = True
-		verbose = False
 
 		while (packet):
-			packet_size = rawData[n]
-			if verbose:
-				print("packet_size=" + str(packet_size))
+			packet_size = raw_data[n]
+			if self.VERBOSE:
+				print("* packet_size = %i" % packet_size)
 			n += 1
 			if packet_size == 255:
-				Packet = False
+				packet = False
 			else:
-				for x in range(packet_size):
-					d = rawData[n+x]
-					#if verbose:
-					#   print "  frame byte number=" +str(x)
-					#   print "    frame byte=" +str(d)
-					if d & 128:
-						# latch
-						c = (d>>5)&3
-						latched_channel = c
-						if d & 16:
-							# volume
-							if verbose:
-								print(" volume on channel " + str(c))
-							registers[c+7] = d & register_mask
+				x = 0
+				#for x in range(packet_size, 2):
+				while x < packet_size:
+					a = raw_data[n+x]
+					x += 1
+					d = raw_data[n+x]
+					x += 1
 
-						else:
-							# tone
-							if verbose:
-								print(" tone on channel " + str(c))
-
-							registers[c*2+0] = d & register_mask                    
-
-					else:
-						if verbose:
-							print(" tone data on latched channel " + str(latched_channel))
-						registers[latched_channel*2+1] = d # we no longer do any masking here # d & 63 # tone data only contains 6 bits of info anyway, so no need for mask
-						if latched_channel == 3:
-							print("ERROR CHANNEL")
-
-
-
-
+					if self.VERBOSE:
+						print("* register %i <- data %i" % (a, d))
+					registers[a] = d
 
 				# emit current state of each of the 11 registers to 11 different bytearrays
-				for x in range(11):
+				for x in range(14):
 					output_blocks[x].append( registers[x] )
 
 				# next packet                
@@ -152,16 +152,16 @@ class VgmPacker:
 			# make sure we only emit tone3 when it changes, or 15 for no-change
 			# this prevents the LFSR from being reset
 			lastTone3 = 255  
-			for x in range(len(output_blocks[6])):
-				t = output_blocks[6][x]
+			for x in range(len(output_blocks[NOISE_PERIOD])):
+				t = output_blocks[NOISE_PERIOD][x]
 				if t == lastTone3:
-					output_blocks[6][x] = 15
+					output_blocks[NOISE_PERIOD][x] = 15
 				lastTone3 = t
 
 		#    print(output_blocks[6])
 
-		# Add EOF marker (0x08) to tone3 byte stream
-		output_blocks[6].append(0x08)	# 0x08 is an invalid noise tone.
+		# Add EON (end-of-noise) marker (0x20) to noise byte stream
+		output_blocks[NOISE_PERIOD].append(EON)	# 0x20 is an invalid noise tone.
 
 		# return the split blocks
 		return output_blocks
@@ -272,7 +272,6 @@ class VgmPacker:
 	# apply simple RLE encoding to a block of 4-bit tone or volume data
 	# run length encoded into top 4-bits. 0=no repeat, 15=15 repeats.
 	def rle(self, block):
-		#return block
 		if not self.RLE:
 			return block
 
@@ -340,12 +339,12 @@ class VgmPacker:
 					break
 
 			# first byte is command, second byte is data
-			out = (block[n]<<8) + block[n+1]
-			#print("value=" + str(out) + ", run length=" + str(count))
+			out = (block[n] << 8) + block[n+1]
+			if self.VERBOSE: print("value=%x (%i), run length=%i" % (out, out, count))
 
-			#test = (block[n+0]<<4) + block[n+1] # top 6 bits plus bottom 4 bits = 10 bits
-			if (block[n+1] > 63) or (block[n+0] > 15):
-				print("Error at offset " + str(offset) + ", tone value is greater than 10 bits in size")
+			#test = (block[n+0]<<4) + block[n+1] # top 4 bits plus bottom 8 bits = 12 bits
+			#if (block[n+1] > 15): # or (block[n+0] > 15):
+			#	print("Error at offset " + str(offset) + ", tone value is greater than 10 bits in size")
 
 
 			if (out > 4095):
@@ -550,9 +549,11 @@ class VgmPacker:
 
 		# parse the header
 		header_size = data_block[0]       # header size
+		if self.VERBOSE: print("* header_size = %i" % header_size)
 		play_rate = data_block[1]         # play rate
+		if self.VERBOSE: print("* play_rate = %i" % play_rate)
 
-		if header_size == 5 and play_rate == 50:
+		if header_size == 5: # and play_rate == 50:
 			packet_count = data_block[2] + data_block[3]*256       # packet count LO
 			duration_mm = data_block[4]       # duration mm
 			duration_ss = data_block[5]       # duration ss
@@ -561,13 +562,12 @@ class VgmPacker:
 			data_offset += data_block[data_offset]+1
 			data_offset += data_block[data_offset]+1
 
-
-			print("header_size=" +str(header_size))
-			print("play_rate="+str(play_rate))
-			print("packet_count="+str(packet_count))
-			print("duration_mm="+str(duration_mm))
-			print("duration_ss="+str(duration_ss))
-			print("data_offset="+str(data_offset))
+			print("header_size=%i" % header_size)
+			print("play_rate=%i" % play_rate)
+			print("packet_count=%i" % packet_count)
+			print("duration_mm=%i" % duration_mm)
+			print("duration_ss=%i" % duration_ss)
+			print("data_offset=%i" % data_offset)
 		else:
 			print("No header.")
 
@@ -576,12 +576,14 @@ class VgmPacker:
 		# Trim off the header data. The rest is raw data.
 		data_block = data_block[data_offset:]
 
+
 		#----------------------------------------------------------
 		# Begin VGM packer suite
 		#----------------------------------------------------------
 
 		# Ok the definitive packed VGM format is:
-		# 1. Register data split into 8 streams, 3x 16-bit tones, 1x 8-bit channel3 tones 4x 8-bit volumes.
+		# 1. Register data split into 10 streams, 3x 16-bit tones, 1x 8-bit noise channel, 1x 8-bit mixer register,
+        #    3x 8-bit volumes, 1x 16-bit envelope period and 1x 8-bit envelope shape.
 		# 2. Register command bits are stripped
 		# 3. Channel3 tone stream replaces runs with 0x0F to signal no change, plus 0x08 is appended as an EOF marker
 		# 4. All 8 streams are RLE compressed, using top 4bits as run length
@@ -591,7 +593,6 @@ class VgmPacker:
 		# 8. The LZ4 magic number is altered from [04 22 4d 18] to [56 47 43 00] (so that it is no longer seen as LZ4 compatible) [byte 3 bit6=1=LZ4-16bit, =0=LZ4-8bit]
 		# 9. If huffman is applied, the magic number is [56 47 43 80] [byte 3 bit7=1=+Huffman]
 		# We might be able to support 16-bit offsets later. WIP/TODO. Magic number would be [56 47 43 40] (plain LZ4) or [56 47 43 C0] with huffman
-
 
 
 		lz4 = LZ4()
@@ -611,13 +612,10 @@ class VgmPacker:
 			#	lz4.optimizedCompression(False)
 
 
-
-
 		#----------------------------------------------------------
-		# Unpack the register data into 11 separate data streams
+		# Unpack the register data into 10 separate data streams
 		#----------------------------------------------------------
 		registers = self.split_raw(data_block, True)
-
 
 
 		# test packer for raw data unsplit
@@ -631,16 +629,16 @@ class VgmPacker:
 			lz4.beginFrame(output)
 
 			# re-write LZ4 magic number if incompatible
-			if self.LZ48 or use_huffman: #self.ENABLE_HUFFMAN:
+			if self.LZ48 or use_huffman:
 				n = 0x00
-				if use_huffman: #self.ENABLE_HUFFMAN:
+				if use_huffman:
 					n |= 0x80
 				output[0] = 0x56
 				output[1] = 0x47
 				output[2] = 0x43
 				output[3] = n
 
-			# LZ4 Compress the 8 data stream
+			# LZ4 Compress the 10 data stream
 			compressed_block = lz4.compressBlock( stream )
 			self.testUnpackLZ4(compressed_block, stream)
 			output += compressed_block
@@ -660,23 +658,25 @@ class VgmPacker:
 		# check there's no odd noise settings
 		if True:
 			invalid_noise_range = False
-			for n in range(len(registers[6])):
-				noise = registers[6][n]
-				if noise > 7:
-					print(" - Found invalid noise register setting of " + str(noise) + ", at offset " + str(n))
+			for n in range(len(registers[NOISE_PERIOD])):
+				noise = registers[NOISE_PERIOD][n]
+				if noise > EON and n != len(registers[NOISE_PERIOD]) - 1:
+					print("* Found invalid noise register setting of %i, at offset %i" % (noise, n))
 					invalid_noise_range = True
 
 
 		# Step 1 - reformat the register data streams
 		streams = []
-		streams.append( self.rle2( self.combine_registers( registers, [0, 1]) ) ) # tone0 HI/LO
-		streams.append( self.rle2( self.combine_registers( registers, [2, 3]) ) ) # tone1 HI/LO
-		streams.append( self.rle2( self.combine_registers( registers, [4, 5]) ) ) # tone2 HI/LO
-		streams.append( self.rle( self.diff( registers[6], 0x0f ) ) ) # tone3 (is diffed also so we create skip commands - 0x0f)
-		streams.append( self.rle( registers[7] ) ) # v0
-		streams.append( self.rle( registers[8] ) ) # v1
-		streams.append( self.rle( registers[9] ) ) # v2
-		streams.append( self.rle( registers[10] ) ) # v3
+		streams.append( self.rle2( self.combine_registers( registers, CHANNEL_A) ) )
+		streams.append( self.rle2( self.combine_registers( registers, CHANNEL_B) ) )
+		streams.append( self.rle2( self.combine_registers( registers, CHANNEL_C) ) )
+		streams.append( self.rle( self.diff( registers[NOISE_PERIOD], 0x0f ) ) ) # noise channel (is diffed also so we create skip commands - 0x0f)
+		streams.append( self.rle( registers[MIXER] ) )
+		streams.append( self.rle( registers[CHANNEL_A_VOLUME] ) )
+		streams.append( self.rle( registers[CHANNEL_B_VOLUME] ) )
+		streams.append( self.rle( registers[CHANNEL_C_VOLUME] ) )
+		#streams.append( self.rle2( self.combine_registers( registers, ENVELOPE_PERIOD) ) )
+		streams.append( self.rle( registers[ENVELOPE_SHAPE] ) )
 
 		if self.OUTPUT_RAWDATA:
 			# write a raw data version of the file in the most optimal data format
@@ -704,7 +704,7 @@ class VgmPacker:
 
 		# LZ4 Compress the 8 data streams
 		for i in range(len(streams)):
-			#print("lz4 compressing stream #" + str(i))
+			if self.VERBOSE: print("lz4 compressing stream #%i" % i)
 			stream = streams[i]
 			compressed_block = lz4.compressBlock( stream )
 			self.testUnpackLZ4(compressed_block, stream)

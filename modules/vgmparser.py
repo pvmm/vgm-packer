@@ -435,6 +435,7 @@ class VgmStream:
 		print("parse_commands() called")
 		# Save the current position of the VGM data
 		original_pos = self.data.tell()
+		offset = original_pos
 
 		# Seek to the start of the VGM data
 		self.data.seek(
@@ -446,7 +447,8 @@ class VgmStream:
 			# Read a byte, this will be a VGM command, we will then make
 			# decisions based on the given command
 			command = self.data.read(1)
-			print("command: %s" % hex(ord(command)))
+			offset += 1
+			if self.VERBOSE: print("command: %x" % ord(command))
 
 			# Break if we are at the end of the file
 			if command == '':
@@ -455,15 +457,17 @@ class VgmStream:
 			# 0xA0 aa dd - PSG (AY8910) write value dd to register aa
 			if command == b'\xa0':
 				data = self.data.read(2)
+				offset += 2
 				self.command_list.append({
 					'command': command,
 					'data': data,
 				})
-				if self.VERBOSE: print("Send %i to register %i" % ( ord(data[1]), ord(data[0]) ) )
+				if self.VERBOSE: print("Send %i to register %i at offset %i" % ( ord(data[1]), ord(data[0]), offset) )
 
 			# 0x61 nn nn - Wait n samples, n can range from 0 to 65535
 			elif command == b'\x61':
 				data = self.data.read(2)
+				offset += 2
 				self.command_list.append({
 					'command': command,
 					'data': data,
@@ -488,12 +492,15 @@ class VgmStream:
 			elif command == b'\x67':
 				# Skip the compatibility and type bytes (0x66 tt)
 				self.data.seek(2, 1)
+				offset += 2
 
 				# Read the size of the data block
 				data_block_size = struct.unpack('<I', self.data.read(4))[0]
+				offset += 4
 
 				# Store the data block for later use
 				self.data_block = ByteBuffer(self.data.read(data_block_size))
+				offset += 1
 
 			# 0x7n - Wait n+1 samples, n can range from 0 to 15
 			# 0x8n - YM2612 port 0 address 2A write from the data bank, then
@@ -509,6 +516,7 @@ class VgmStream:
 					'command': command,
 					'data': self.data.read(4),
 				})
+				offset += 4
 				
 			# 0x30 dd - dual chip command
 			elif command == b'\x30':
@@ -517,7 +525,8 @@ class VgmStream:
 						'command': command,
 						'data': self.data.read(1),
 					})
-			
+					offset += 1
+
 
 		# Seek back to the original position in the VGM data
 		if self.VERBOSE: print("parse_commands() done!")
@@ -605,7 +614,7 @@ class VgmStream:
 		# eof
 		data_block.append(0x00)	# append one last wait
 		data_block.append(0xFF)	# signal EOF
-        print("EOF added to stream")
+		print("EOF added to stream")
 
 
 		header_block = bytearray()
