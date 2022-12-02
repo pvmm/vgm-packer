@@ -46,13 +46,13 @@ class FatalError(Exception):
 class VgmStream:
 
 
-	# VGM commands:
-	# 0x50	[dd]	= PSG SN76489 write value dd
-	# 0x61	[nnnn]	= WAIT n cycles (0-65535)
-	# 0x62			= WAIT 735 samples (1/60 sec)
-	# 0x63			= WAIT 882 samples (1/50 sec)
-	# 0x66			= END
-	# 0x7n			= WAIT n+1 samples (0-15)
+	# supported VGM commands:
+	# 0x61	[nnnn]	  = WAIT n cycles (0-65535)
+	# 0x62			  = WAIT 735 samples at 44100hz (1/60 sec)
+	# 0x63			  = WAIT 882 samples at 44100hz (1/50 sec)
+	# 0x66			  = END
+	# 0x7n			  = WAIT n+1 samples (0-15)
+	# 0xA0  [aa] [dd] = PSG AY8910 write value dd to register aa
 
 	#--------------------------------------------------------------------------------------------------------------------------------
 	# SN76489 register writes
@@ -91,7 +91,7 @@ class VgmStream:
 
 	# script options
 	RETUNE_PERIODIC = True	# [TO BE REMOVED] if true will attempt to retune any use of the periodic noise effect
-	VERBOSE = False
+	VERBOSE = True
 	STRIP_GD3 = False	
 	LENGTH = 0 # required output length (in seconds)
 	
@@ -108,107 +108,14 @@ class VgmStream:
 	
 	# Supported VGM versions
 	supported_ver_list = [
-		0x00000101,
-		0x00000110,
-		0x00000150,
 		0x00000151,
 		0x00000160,
 		0x00000161,
+		0x00000171,
 	]
 
 	# VGM metadata offsets
 	metadata_offsets = {
-		# SDM Hacked version number 101 too
-		0x00000101: {
-			'vgm_ident': {'offset': 0x00, 'size': 4, 'type_format': None},
-			'eof_offset': {'offset': 0x04, 'size': 4, 'type_format': '<I'},
-			'version': {'offset': 0x08, 'size': 4, 'type_format': '<I'},
-			'sn76489_clock': {'offset': 0x0c, 'size': 4, 'type_format': '<I'},
-			'ym2413_clock': {'offset': 0x10, 'size': 4, 'type_format': '<I'},
-			'gd3_offset': {'offset': 0x14, 'size': 4, 'type_format': '<I'},
-			'total_samples': {'offset': 0x18, 'size': 4, 'type_format': '<I'},
-			'loop_offset': {'offset': 0x1c, 'size': 4, 'type_format': '<I'},
-			'loop_samples': {'offset': 0x20, 'size': 4, 'type_format': '<I'},
-			'rate': {'offset': 0x24, 'size': 4, 'type_format': '<I'},
-			'sn76489_feedback': {
-				'offset': 0x28,
-				'size': 2,
-				'type_format': '<H',
-			},
-			'sn76489_shift_register_width': {
-				'offset': 0x2a,
-				'size': 1,
-				'type_format': 'B',
-			},
-			'ym2612_clock': {'offset': 0x2c, 'size': 4, 'type_format': '<I'},
-			'ym2151_clock': {'offset': 0x30, 'size': 4, 'type_format': '<I'},
-			'vgm_data_offset': {
-				'offset': 0x34,
-				'size': 4,
-				'type_format': '<I',
-			},
-		},
-
-		# Version 1.10`
-		0x00000110: {
-			'vgm_ident': {'offset': 0x00, 'size': 4, 'type_format': None},
-			'eof_offset': {'offset': 0x04, 'size': 4, 'type_format': '<I'},
-			'version': {'offset': 0x08, 'size': 4, 'type_format': '<I'},
-			'sn76489_clock': {'offset': 0x0c, 'size': 4, 'type_format': '<I'},
-			'ym2413_clock': {'offset': 0x10, 'size': 4, 'type_format': '<I'},
-			'gd3_offset': {'offset': 0x14, 'size': 4, 'type_format': '<I'},
-			'total_samples': {'offset': 0x18, 'size': 4, 'type_format': '<I'},
-			'loop_offset': {'offset': 0x1c, 'size': 4, 'type_format': '<I'},
-			'loop_samples': {'offset': 0x20, 'size': 4, 'type_format': '<I'},
-			'rate': {'offset': 0x24, 'size': 4, 'type_format': '<I'},
-			'sn76489_feedback': {
-				'offset': 0x28,
-				'size': 2,
-				'type_format': '<H',
-			},
-			'sn76489_shift_register_width': {
-				'offset': 0x2a,
-				'size': 1,
-				'type_format': 'B',
-			},
-			'ym2612_clock': {'offset': 0x2c, 'size': 4, 'type_format': '<I'},
-			'ym2151_clock': {'offset': 0x30, 'size': 4, 'type_format': '<I'},
-			'vgm_data_offset': {
-				'offset': 0x34,
-				'size': 4,
-				'type_format': '<I',
-			},
-		},
-		# Version 1.50`
-		0x00000150: {
-			'vgm_ident': {'offset': 0x00, 'size': 4, 'type_format': None},
-			'eof_offset': {'offset': 0x04, 'size': 4, 'type_format': '<I'},
-			'version': {'offset': 0x08, 'size': 4, 'type_format': '<I'},
-			'sn76489_clock': {'offset': 0x0c, 'size': 4, 'type_format': '<I'},
-			'ym2413_clock': {'offset': 0x10, 'size': 4, 'type_format': '<I'},
-			'gd3_offset': {'offset': 0x14, 'size': 4, 'type_format': '<I'},
-			'total_samples': {'offset': 0x18, 'size': 4, 'type_format': '<I'},
-			'loop_offset': {'offset': 0x1c, 'size': 4, 'type_format': '<I'},
-			'loop_samples': {'offset': 0x20, 'size': 4, 'type_format': '<I'},
-			'rate': {'offset': 0x24, 'size': 4, 'type_format': '<I'},
-			'sn76489_feedback': {
-				'offset': 0x28,
-				'size': 2,
-				'type_format': '<H',
-			},
-			'sn76489_shift_register_width': {
-				'offset': 0x2a,
-				'size': 1,
-				'type_format': 'B',
-			},
-			'ym2612_clock': {'offset': 0x2c, 'size': 4, 'type_format': '<I'},
-			'ym2151_clock': {'offset': 0x30, 'size': 4, 'type_format': '<I'},
-			'vgm_data_offset': {
-				'offset': 0x34,
-				'size': 4,
-				'type_format': '<I',
-			},
-		},
 		# SDM Hacked version number, we are happy enough to parse v1.51 as if it were 1.50 since the 1.51 updates dont apply to us anyway
 		0x00000151: {
 			'vgm_ident': {'offset': 0x00, 'size': 4, 'type_format': None},
@@ -238,6 +145,7 @@ class VgmStream:
 				'size': 4,
 				'type_format': '<I',
 			},
+			'ay8910_clock': {'offset': 0x74, 'size': 4, 'type_format': '<I'},
 		},
 		# SDM Hacked version number, we are happy enough to parse v1.60 as if it were 1.50 since the 1.51 updates dont apply to us anyway
 		0x00000160: {
@@ -268,7 +176,7 @@ class VgmStream:
 				'size': 4,
 				'type_format': '<I',
 			},
-			
+			'ay8910_clock': {'offset': 0x74, 'size': 4, 'type_format': '<I'},
 		},		
 		# SDM Hacked version number, we are happy enough to parse v1.61 as if it were 1.50 since the 1.51 updates dont apply to us anyway
 		0x00000161: {
@@ -299,6 +207,8 @@ class VgmStream:
 				'size': 4,
 				'type_format': '<I',
 			},
+			'ay8910_clock': {'offset': 0x74, 'size': 4, 'type_format': '<I'},
+			'K051649_clock': {'offset': 0x9c, 'size': 4, 'type_format': '<I'},
 		}
 	}
 
@@ -334,25 +244,23 @@ class VgmStream:
 		self.vgm_loop_offset = self.metadata['loop_offset']
 		self.vgm_loop_length = self.metadata['loop_samples']
 		
-		print("      VGM Version : " + "%x" % int(self.metadata['version']) )
-		print("VGM SN76489 clock : " + str(float(self.metadata['sn76489_clock'])/1000000) + " MHz" )
-		print("         VGM Rate : " + str(float(self.metadata['rate'])) + " Hz" )
-		print("      VGM Samples : " + str(int(self.metadata['total_samples'])) + " (" + str(int(self.metadata['total_samples'])/self.VGM_FREQUENCY) + " seconds)" )
-		print("  VGM Loop Offset : " + str(self.vgm_loop_offset) )
-		print("  VGM Loop Length : " + str(self.vgm_loop_length) )
-
-
+		print("     VGM Version : " + "%x" % int(self.metadata['version']) )
+		print("VGM AY8910 clock : " + str(float(self.metadata['ay8910_clock'])/1000000) + " MHz" )
+		print("        VGM Rate : " + str(float(self.metadata['rate']) or 60.0) + " Hz" )
+		print("     VGM Samples : " + str(int(self.metadata['total_samples'])) + " (" + str(int(self.metadata['total_samples'])/self.VGM_FREQUENCY) + " seconds)" )
+		print(" VGM Loop Offset : " + str(self.vgm_loop_offset) )
+		print(" VGM Loop Length : " + str(self.vgm_loop_length) )
 
 
 		# Validation to check we can parse it
 		self.validate_vgm_version()
 
 		# Sanity check this VGM is suitable for this script - must be SN76489 only
-		if self.metadata['sn76489_clock'] == 0 or self.metadata['ym2413_clock'] !=0 or self.metadata['ym2413_clock'] !=0 or self.metadata['ym2413_clock'] !=0:
-			raise FatalError("This script only supports VGM's for SN76489 PSG")		
+		if self.metadata['ay8910_clock'] == 0 and self.metadata['k051649_clock'] != 0:
+			raise FatalError("This script only supports VGM's for AY8910 PSG")
 		
 		# see if this VGM uses Dual Chip mode
-		if (self.metadata['sn76489_clock'] & 0x40000000) == 0x40000000:
+		if (self.metadata['ay8910_clock'] & 0x40000000) == 0x40000000:
 			self.dual_chip_mode_enabled = True
 		else:
 			self.dual_chip_mode_enabled = False
@@ -363,12 +271,12 @@ class VgmStream:
 		# override/disable dual chip commands in the output stream if required
 		if (self.disable_dual_chip == True) and (self.dual_chip_mode_enabled == True) :
 			# remove the clock flag that enables dual chip mode
-			self.metadata['sn76489_clock'] = self.metadata['sn76489_clock'] & 0xbfffffff
+			self.metadata['ay8910_clock'] = self.metadata['ay8910_clock'] & 0xbfffffff
 			self.dual_chip_mode_enabled = False
 			print( "Dual Chip Mode Disabled - DC Commands will be removed" )
 
 		# take a copy of the clock speed for the VGM processor functions
-		self.vgm_source_clock = self.metadata['sn76489_clock']
+		self.vgm_source_clock = self.metadata['ay8910_clock']
 		self.vgm_target_clock = self.vgm_source_clock
 		
 		# Parse GD3 data and the VGM commands
@@ -524,6 +432,7 @@ class VgmStream:
 	#-------------------------------------------------------------------------------------------------
 
 	def parse_commands(self):
+		print("parse_commands() called")
 		# Save the current position of the VGM data
 		original_pos = self.data.tell()
 
@@ -537,40 +446,37 @@ class VgmStream:
 			# Read a byte, this will be a VGM command, we will then make
 			# decisions based on the given command
 			command = self.data.read(1)
+			print("command: %s" % hex(ord(command)))
 
 			# Break if we are at the end of the file
 			if command == '':
 				break
 
-			# 0x4f dd - Game Gear PSG stereo, write dd to port 0x06
-			# 0x50 dd - PSG (SN76489/SN76496) write value dd
-			if command in [b'\x4f', b'\x50']:
+			# 0xA0 aa dd - PSG (AY8910) write value dd to register aa
+			if command == b'\xa0':
+				data = self.data.read(2)
 				self.command_list.append({
 					'command': command,
-					'data': self.data.read(1),
+					'data': data,
 				})
-
-			# 0x51 aa dd - YM2413, write value dd to register aa
-			# 0x52 aa dd - YM2612 port 0, write value dd to register aa
-			# 0x53 aa dd - YM2612 port 1, write value dd to register aa
-			# 0x54 aa dd - YM2151, write value dd to register aa
-			elif command in [b'\x51', b'\x52', b'\x53', b'\x54']:
-				self.command_list.append({
-					'command': command,
-					'data': self.data.read(2),
-				})
+				if self.VERBOSE: print("Send %i to register %i" % ( ord(data[1]), ord(data[0]) ) )
 
 			# 0x61 nn nn - Wait n samples, n can range from 0 to 65535
 			elif command == b'\x61':
+				data = self.data.read(2)
 				self.command_list.append({
 					'command': command,
-					'data': self.data.read(2),
+					'data': data,
 				})
+				value = ((ord(data[0]) & 255) * 256) + (ord(data[1]) >> 8)
+				intervals = value / (self.VGM_FREQUENCY / 60.0)
+				if self.VERBOSE: print("Wait %i milli" % intervals)
 
 			# 0x62 - Wait 735 samples (60th of a second)
 			# 0x63 - Wait 882 samples (50th of a second)
 			# 0x66 - End of sound data
 			elif command in [b'\x62', b'\x63', b'\x66']:
+				if self.VERBOSE: print("Wait %i samples" % (735 if command == b'\x62' else 882))
 				self.command_list.append({'command': command, 'data': None})
 
 				# Stop processing commands if we are at the end of the music
@@ -593,6 +499,7 @@ class VgmStream:
 			# 0x8n - YM2612 port 0 address 2A write from the data bank, then
 			#        wait n samples; n can range from 0 to 15
 			elif b'\x70' <= command <= b'\x8f':
+				if self.VERBOSE: print("Wait %i sample(s)" % (ord(command) - 0x70))
 				self.command_list.append({'command': command, 'data': None})
 
 			# 0xe0 dddddddd - Seek to offset dddddddd (Intel byte order) in PCM
@@ -613,6 +520,7 @@ class VgmStream:
 			
 
 		# Seek back to the original position in the VGM data
+		if self.VERBOSE: print("parse_commands() done!")
 		self.data.seek(original_pos)
 
 
@@ -624,7 +532,7 @@ class VgmStream:
 
 		byte_size = 1
 		packet_size = 0
-		play_rate = self.metadata['rate']
+		play_rate = self.metadata['rate'] or 60.0
 		play_interval = self.VGM_FREQUENCY / play_rate
 		data_block = bytearray()
 		packet_block = bytearray()
@@ -653,29 +561,32 @@ class VgmStream:
 				# start new packet
 				packet_block = bytearray()
 				
-				if self.VERBOSE: print( "Command " + str(binascii.hexlify(command)) )
-				
+				if self.VERBOSE: print( "* command 0x" + str(binascii.hexlify(command)) )
 				
 
 				# see if command is a wait longer than one interval and emit empty packets to compensate
 				wait = 0
 				if command == struct.pack('B', 0x61):
 					t = int(binascii.hexlify(q["data"]), 16)
+					print('data = ', q['data'][0], q['data'][1], hex(t))
 					wait = ((t & 255) * 256) + (t>>8)
 				else:
+					if command == struct.pack('B', 0xa0):
+						packet_block.extend(q['data'])
+						if self.VERBOSE: print( "* packet length %i" % len(q['data']) )
 					if command == struct.pack('B', 0x62):
 						wait = 735
 					else:
 						if command == struct.pack('B', 0x63):
-							wait = 	882
+							wait = 882
 					
 				if wait != 0:	
 					intervals = wait / (self.VGM_FREQUENCY / play_rate)
 					if intervals == 0:
-						print( "ERROR in data stream, wait value (" + str(wait) + ") was not divisible by play_rate (" + str((self.VGM_FREQUENCY / play_rate)) + "), bailing" )
+						print( "ERROR in data stream, wait value (%s) was not divisible by play_rate (" + str((self.VGM_FREQUENCY / play_rate)) + "), bailing", wait )
 						return
 					else:
-						if self.VERBOSE: print( "WAIT " + str(intervals) + " intervals" )
+						if self.VERBOSE: print( "WAIT %s intervals" % intervals )
 						
 					# emit empty packet headers to simulate wait commands
 					intervals -= 1
@@ -694,13 +605,14 @@ class VgmStream:
 		# eof
 		data_block.append(0x00)	# append one last wait
 		data_block.append(0xFF)	# signal EOF
+        print("EOF added to stream")
 
 
 		header_block = bytearray()
 		# emit the play rate
-		print( "play rate is " + str(play_rate) )
+		print( "play rate is " + str(int(play_rate)) )
 		# python 3 struct.pack returns iterable "bytes" even if len is 1, so we use extend rather than append since this is compatible with python 2 and 3
-		header_block.extend(struct.pack('B', play_rate & 0xff))
+		header_block.extend(struct.pack('B', int(play_rate) & 0xff))
 		header_block.extend(struct.pack('B', packet_count & 0xff))		
 		header_block.extend(struct.pack('B', (packet_count >> 8) & 0xff))	
 
@@ -760,9 +672,8 @@ class VgmStream:
 	# write vgm file (with same header data as the input, but from binary register data)
 	# registers is an array of 11 byte arrays, each byte array containing the tune data
 	def write_vgm(self, vgm_stream, filename):
-			
+		raise(NotImplemented("yet"))
 		print("   Writing output VGM file '" + filename + "'")
-
 
 		vgm_stream_length = len(vgm_stream)		
 
@@ -799,7 +710,7 @@ class VgmStream:
 		vgm_data = bytearray()
 		vgm_data.extend(self.vgm_magic_number)
 		vgm_data.extend(struct.pack('I', 64 + vgm_stream_length + gd3_stream_length - 4))				# EoF offset
-		vgm_data.extend(struct.pack('I', 0x00000151))		# Version
+		vgm_data.extend(struct.pack('I', 0x00000171))		# Version
 		vgm_data.extend(struct.pack('I', self.metadata['sn76489_clock']))
 		vgm_data.extend(struct.pack('I', self.metadata['ym2413_clock']))
 		vgm_data.extend(struct.pack('I', gd3_offset))				# GD3 offset

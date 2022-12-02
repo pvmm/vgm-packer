@@ -62,28 +62,28 @@ class VgmPacker:
 	ENABLE_HUFFMAN = True # optional
 	VERBOSE = True
 
-	def __init__(self):
+	def __init__(self, rate=60):
 		print("init")
+		self.rate = rate
 
-			
 	#----------------------------------------------------------
 	# Utilities
 	#----------------------------------------------------------
 
 
-	# split the packed raw data into 11 separate streams
-	# returns array of 11 bytearrays
+	# split the packed raw data into 14 separate streams
+	# returns array of 14 bytearrays
 	def split_raw(self, rawData, stripCommands = True):
 
-		registers = [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
-		registers_opt = [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+		registers = [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+		registers_opt = [ 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
 
 		latched_channel = -1
 
 		output_block = bytearray()
 		output_blocks = []
 
-		for o in range(11):
+		for o in range(14):
 			output_blocks.append( bytearray() )
 
 		if stripCommands:
@@ -91,13 +91,13 @@ class VgmPacker:
 		else:
 			register_mask = 255
 
-		# unpack the raw binary data in 11 arrays of register data without any deltas between them
-		# eg. the raw chip writes to all 11 registers every frame
+		# unpack the raw binary data in 14 arrays of register data without any deltas between them
+		# eg. the raw chip writes to all 14 registers every frame
 		n = 0
-		Packet = True
+		packet = True
 		verbose = False
 
-		while (Packet):
+		while (packet):
 			packet_size = rawData[n]
 			if verbose:
 				print("packet_size=" + str(packet_size))
@@ -531,17 +531,11 @@ class VgmPacker:
 		print(" Test LZ4 unpack passed. \n")
 
 
-
-
-
-
 	#----------------------------------------------------------
 	# Process(filename)
 	# Convert the given VGM file to a compressd VGC file
 	#----------------------------------------------------------
 	def process(self, src_filename, dst_filename, buffersize = 255, use_huffman = True):
-
-
 
 		# load the VGM file, or alternatively interpret as a binary
 		if src_filename.lower()[-4:] == ".vgm":
@@ -556,7 +550,7 @@ class VgmPacker:
 
 		# parse the header
 		header_size = data_block[0]       # header size
-		play_rate = data_block[1]       # play rate
+		play_rate = data_block[1]         # play rate
 
 		if header_size == 5 and play_rate == 50:
 			packet_count = data_block[2] + data_block[3]*256       # packet count LO
@@ -623,18 +617,6 @@ class VgmPacker:
 		# Unpack the register data into 11 separate data streams
 		#----------------------------------------------------------
 		registers = self.split_raw(data_block, True)
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
@@ -795,13 +777,13 @@ if __name__ == '__main__':
 		epilog=epilog_string)
 
 	parser.add_argument("input", help="VGM source file (must be single SN76489 PSG format) [input]")
+	parser.add_argument("-r", "--rate", type=int, default=60, help="select input frame rate (default is 60)")
 	parser.add_argument("-o", "--output", metavar="<output>", help="write VGC file <output> (default is '[input].vgc')")
 	parser.add_argument("-b", "--buffer", type=int, default=255, metavar="<n>", help="Set decoder buffer size to <n> bytes, default: 255")
 	parser.add_argument("-n", "--huffman", help="Enable huffman compression", default=False, action="store_true")
 	parser.add_argument("-v", "--verbose", help="Enable verbose mode", action="store_true")
+
 	args = parser.parse_args()
-
-
 	src = args.input
 	dst = args.output
 	if dst == None:
@@ -812,7 +794,7 @@ if __name__ == '__main__':
 		print("ERROR: File '" + src + "' not found")
 		sys.exit()
 
-	packer = VgmPacker()
+	packer = VgmPacker(args.rate)
 	packer.VERBOSE = args.verbose
 	packer.process(src, dst, args.buffer, args.huffman)
 
